@@ -17,26 +17,40 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
-            meson ninja-build \
+            meson ninja-build git \
             libgtk-3-dev \
             libglib2.0-dev \
             libexo-2-dev \
             libxfce4ui-2-dev \
             libxfce4util-dev \
+            xfce4-dev-tools \
             libgudev-1.0-dev \
             libnotify-dev \
             libpcre2-dev \
-            xfce4-dev-tools \
-            intltool \
-            gettext \
-            docbook-xsl \
-            xsltproc \
-            debhelper \
-            dpkg-dev \
-            fakeroot \
+            intltool gettext \
+            docbook-xsl xsltproc \
+            debhelper dpkg-dev fakeroot \
             gobject-introspection \
             libgirepository1.0-dev \
             gtk-doc-tools
+
+      - name: Compilar libxfce4util do source (>= 4.21)
+        run: |
+          git clone --depth=1 https://gitlab.xfce.org/xfce/libxfce4util.git /tmp/libxfce4util
+          cd /tmp/libxfce4util
+          meson setup build --prefix=/usr --buildtype=release
+          meson compile -C build
+          sudo meson install -C build
+          sudo ldconfig
+
+      - name: Compilar libxfce4ui do source (>= 4.21)
+        run: |
+          git clone --depth=1 https://gitlab.xfce.org/xfce/libxfce4ui.git /tmp/libxfce4ui
+          cd /tmp/libxfce4ui
+          meson setup build --prefix=/usr --buildtype=release
+          meson compile -C build
+          sudo meson install -C build
+          sudo ldconfig
 
       - name: Configurar build (meson)
         run: |
@@ -65,7 +79,7 @@ jobs:
           Version: ${VERSION}
           Architecture: ${ARCH}
           Maintainer: SofiaOS Dev <dev@sofiaos>
-          Depends: libgtk-3-0, libglib2.0-0, libexo-2-0, libxfce4ui-2-0, libxfce4util7, libgudev-1.0-0, libnotify4
+          Depends: libgtk-3-0, libglib2.0-0, libexo-2-0, libgudev-1.0-0, libnotify4
           Section: utils
           Priority: optional
           Description: File Manager do SofiaOS / mesaSuite
