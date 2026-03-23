@@ -3,28 +3,24 @@ name: Build mesa-files .deb
 on:
   push:
     branches: [ master, main ]
-  workflow_dispatch:  # permite rodar manualmente pela aba Actions
+  workflow_dispatch:
 
 jobs:
   build-deb:
     runs-on: ubuntu-22.04
 
     steps:
-      # ── 1. Checkout ─────────────────────────────────────────────────
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # ── 2. Dependências de build ─────────────────────────────────────
       - name: Instalar dependências
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
-            meson ninja-build \
+            meson ninja-build git \
             libgtk-3-dev \
             libglib2.0-dev \
             libexo-2-dev \
-            libxfce4ui-2-dev \
-            libxfce4util-dev \
             libgudev-1.0-dev \
             libnotify-dev \
             libpcre2-dev \
@@ -35,9 +31,29 @@ jobs:
             xsltproc \
             debhelper \
             dpkg-dev \
-            fakeroot
+            fakeroot \
+            gobject-introspection \
+            libgirepository1.0-dev \
+            gtk-doc-tools || true
 
-      # ── 3. Compilar com meson ────────────────────────────────────────
+      - name: Compilar libxfce4util (recente)
+        run: |
+          git clone --depth=1 https://gitlab.xfce.org/xfce/libxfce4util.git /tmp/libxfce4util
+          cd /tmp/libxfce4util
+          meson setup build --prefix=/usr --buildtype=release
+          meson compile -C build
+          sudo meson install -C build
+          sudo ldconfig
+
+      - name: Compilar libxfce4ui (recente)
+        run: |
+          git clone --depth=1 https://gitlab.xfce.org/xfce/libxfce4ui.git /tmp/libxfce4ui
+          cd /tmp/libxfce4ui
+          meson setup build --prefix=/usr --buildtype=release
+          meson compile -C build
+          sudo meson install -C build
+          sudo ldconfig
+
       - name: Configurar build (meson)
         run: |
           meson setup build \
@@ -47,12 +63,10 @@ jobs:
       - name: Compilar
         run: meson compile -C build
 
-      # ── 4. Instalar em diretório staging ─────────────────────────────
       - name: Instalar no diretório de staging
         run: |
           DESTDIR="$GITHUB_WORKSPACE/pkg_root" meson install -C build
 
-      # ── 5. Montar estrutura do .deb ──────────────────────────────────
       - name: Montar pacote .deb
         run: |
           PKG_ROOT="$GITHUB_WORKSPACE/pkg_root"
@@ -62,36 +76,28 @@ jobs:
 
           mkdir -p "$DEB_DIR/DEBIAN"
 
-          # Control file — metadados do pacote
           cat > "$DEB_DIR/DEBIAN/control" << EOF
           Package: mesa-files
           Version: ${VERSION}
           Architecture: ${ARCH}
           Maintainer: SofiaOS Dev <dev@sofiaos>
-          Depends: libgtk-3-0, libglib2.0-0, libexo-2-0, libxfce4ui-2-0, libxfce4util7, libgudev-1.0-0, libnotify4
+          Depends: libgtk-3-0, libglib2.0-0, libexo-2-0, libgudev-1.0-0, libnotify4
           Section: utils
           Priority: optional
           Description: File Manager do SofiaOS / mesaSuite
            Fork do Thunar adaptado para o ecossistema SofiaOS.
-           Interface GTK3 com integração ao Grande Vigia (AppletManager).
           EOF
 
-          # Copia os arquivos instalados para dentro do .deb
           cp -r "$PKG_ROOT"/* "$DEB_DIR/"
-
-          # Corrige permissões
           find "$DEB_DIR" -type d -exec chmod 755 {} \;
           find "$DEB_DIR" -type f -exec chmod 644 {} \;
           chmod 755 "$DEB_DIR/usr/bin/"* 2>/dev/null || true
 
-          # Gera o .deb
           fakeroot dpkg-deb --build "$DEB_DIR" \
             "$GITHUB_WORKSPACE/mesa-files_${VERSION}_${ARCH}.deb"
 
-          echo "✔ .deb gerado: mesa-files_${VERSION}_${ARCH}.deb"
           ls -lh "$GITHUB_WORKSPACE/mesa-files_${VERSION}_${ARCH}.deb"
 
-      # ── 6. Publica como Release ──────────────────────────────────────
       - name: Criar Release com o .deb
         uses: softprops/action-gh-release@v2
         with:
@@ -104,7 +110,7 @@ jobs:
             **Instalar:**
             ```bash
             sudo dpkg -i mesa-files_1.0.0_amd64.deb
-            sudo apt-get install -f  # resolve dependências se necessário
+            sudo apt-get install -f
             ```
           files: mesa-files_1.0.0_amd64.deb
           draft: false
